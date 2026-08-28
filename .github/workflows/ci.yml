@@ -31,3 +31,9 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Run coverage
+        run: npm run coverage
+
+      - name: Security audit
+        run: npm audit --audit-level=high

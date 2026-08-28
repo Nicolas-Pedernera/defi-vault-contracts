@@ -1,5 +1,7 @@
 # DeFi Vault Contracts
 
+[![CI](https://github.com/Nicolas-Pedernera/defi-vault-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/Nicolas-Pedernera/defi-vault-contracts/actions/workflows/ci.yml)
+
 Security-focused Solidity vault demonstrating defensive smart-contract engineering through deposits, withdrawals, pausability, reentrancy protection, and adversarial testing.
 
 > **Status:** Educational / portfolio project.  
