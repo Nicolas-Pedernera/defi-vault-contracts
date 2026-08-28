@@ -1,0 +1,24 @@
+{
+  "name": "defi-vault-contracts",
+  "version": "1.0.0",
+  "description": "Solidity smart contracts for a staking vault — deposit/withdraw logic, security-focused design, and comprehensive Hardhat test coverage.",
+  "private": false,
+  "license": "MIT",
+  "author": "Nicolás Pedernera <https://github.com/Nicolas-Pedernera>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nicolas-Pedernera/defi-vault-contracts.git"
+  },
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "hardhat": "^2.29.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}
