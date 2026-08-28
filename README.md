@@ -1,60 +1,97 @@
 # DeFi Vault Contracts
 
-[![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?logo=solidity)](https://soliditylang.org/)
-[![Hardhat](https://img.shields.io/badge/Hardhat-3-yellow?logo=hardhat)](https://hardhat.org/)
-[![Tests](https://img.shields.io/badge/tests-23%20passing-brightgreen)](#testing)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/)
-
-> Security-focused Ethereum smart-contract project demonstrating defensive Solidity engineering, secure ETH accounting, and adversarial testing.
-
-**Status:** Educational / portfolio project.  
-**Not audited. Not intended for production use or custody of real funds.**
-
----
+Solidity smart contracts for a staking vault, built with a deliberate focus on the security patterns that matter in real DeFi products — not just "it compiles and works on the happy path."
 
 ## Overview
 
-`StakingVault` is a minimal ETH vault that allows users to deposit and withdraw their own funds while maintaining isolated on-chain accounting.
+`StakingVault` lets users deposit and withdraw ETH, tracking individual balances on-chain. It intentionally does not implement yield — the point of this project is to demonstrate correct, defensible handling of user funds under adversarial conditions, which is the hard part of any real vault, lending pool, or exchange contract.
 
-The project intentionally focuses on **security and correctness rather than yield generation**.
+The repository includes a `ReentrancyAttacker` contract used exclusively in the test suite to actually attempt draining the vault, rather than just asserting that a guard "should" work.
 
-### Core functionality
+## Security Patterns Demonstrated
 
-- ETH deposits with per-user balances
-- Multiple deposits per account
-- Partial and full withdrawals
-- Owner-controlled emergency pause
-- Withdrawals remain available while paused
-- ETH reception through `receive()`
-- Aggregate accounting through `totalDeposits`
-- Solidity custom errors
-- Reentrancy protection
-- Safe handling of failed ETH transfers
+- **Checks-Effects-Interactions (CEI):** balances are updated *before* any external call that sends ETH, so a reentrant call sees already-updated state.
+- **Reentrancy guard as defense in depth:** a `nonReentrant` modifier backs up CEI ordering rather than replacing it — the test suite proves both layers by actually attacking the contract.
+- **Custom errors instead of require strings:** cheaper gas, and each failure mode is explicit and typed.
+- **Pull-over-push withdrawals:** users withdraw their own funds; the contract never pushes ETH anywhere unprompted.
+- **Emergency pause:** the owner can halt new deposits without ever blocking existing users from withdrawing their own funds.
 
----
-
-## Architecture
+## Project Structure
 
 ```text
-                         Ethereum / EVM
-                               │
-                               │ ETH
-                               ▼
-                    ┌─────────────────────┐
-                    │    StakingVault     │
-                    │                     │
-                    │ balances[address]   │
-                    │ totalDeposits       │
-                    │ pause state         │
-                    │ reentrancy guard    │
-                    └──────────┬──────────┘
-                               │
-                  ┌────────────┴────────────┐
-                  │                         │
-             deposit()                withdraw()
-                  │                         │
-                  ▼                         ▼
-             User accounting          ETH transfer
-                                            │
-                                            ▼
-                                      User / Contract
+contracts/
+├── StakingVault.sol         # main vault: deposit, withdraw, pause
+└── ReentrancyAttacker.sol   # test-only contract used to attack the vault
+
+test/
+└── StakingVault.ts          # full test suite, including a live reentrancy attack
+```
+
+## Running locally
+
+```bash
+npm install
+npm run compile
+npm test
+```
+
+## What the reentrancy test actually does
+
+Rather than trusting that `nonReentrant` works, the test suite deploys a real attacking contract that:
+
+1. Deposits ETH into the vault.
+2. Calls `withdraw()`.
+3. Inside its own `receive()` function — triggered by the vault sending ETH back — tries to call `withdraw()` again *before the first call has finished*.
+
+The reentrant call hits the guard and reverts, which causes the outer ETH transfer to fail, which unwinds the entire attack transaction. The test asserts the vault's balance is left exactly as it was before the attack — the attacker extracts zero extra ETH.
+
+## Test Coverage
+
+20 tests across five areas:
+
+| Area | What's covered |
+|---|---|
+| Deposits | Balance tracking, multiple deposits, isolation between users, zero-value rejection, events, `receive()` fallback |
+| Withdrawals | Partial/full withdrawal, exact ETH transfer amounts, over-withdrawal rejection, cross-account isolation, events |
+| Pausability | Owner-only pause/unpause, deposits blocked while paused, withdrawals always allowed |
+| Reentrancy | A real attacking contract attempting to drain the vault mid-transfer |
+| Views | On-chain balance reporting |
+
+## Known Limitations
+
+This is a portfolio piece, not an audited production contract. Explicitly out of scope:
+
+- No yield/interest accrual — deposits earn nothing by design, to keep the security surface small and focused
+- No upgradeability (intentional — upgradeable proxies introduce their own class of bugs and are a separate topic)
+- No formal audit — static analysis (Slither) and a professional audit would be required before any real funds touch this contract
+- Single-asset (ETH) only, no ERC-20 support
+
+## Roadmap
+
+- Slither static analysis integration
+- Gas usage reporting per function
+- ERC-20 deposit support
+- Testnet deployment script and verified contract address
+
+## Tech Stack
+
+- Solidity 0.8.24
+- Hardhat
+- TypeScript
+- Chai / Hardhat Toolbox
+
+## License
+
+MIT — see [LICENSE](./LICENSE) for details.
+
+## Author
+
+**Nicolás Pedernera**
+
+Systems Engineer — Universidad de Buenos Aires, 2024
+
+Focused on backend engineering, fintech, cryptocurrency, blockchain infrastructure, and AI systems.
+
+GitHub: https://github.com/Nicolas-Pedernera
+LinkedIn: https://www.linkedin.com/in/nicolas-pedernera-zendx/
+Upwork: https://www.upwork.com/freelancers/~017eec2171ae9d8805
