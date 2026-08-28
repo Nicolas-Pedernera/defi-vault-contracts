@@ -1,69 +1,105 @@
 # DeFi Vault Contracts
 
-Solidity smart contracts for a staking vault, built with a deliberate focus on the security patterns that matter in real DeFi products — not just "it compiles and works on the happy path."
+Security-focused Solidity vault demonstrating defensive smart-contract engineering through deposits, withdrawals, pausability, reentrancy protection, and adversarial testing.
+
+> **Status:** Educational / portfolio project.  
+> **Not audited. Not intended for production use or custody of real funds.**
 
 ## Overview
 
-`StakingVault` lets users deposit and withdraw ETH, tracking individual balances on-chain. It intentionally does not implement yield — the point of this project is to demonstrate correct, defensible handling of user funds under adversarial conditions, which is the hard part of any real vault, lending pool, or exchange contract.
+`StakingVault` is a minimal ETH vault that lets users deposit and withdraw their own funds while maintaining per-user accounting on-chain.
 
-The repository includes a `ReentrancyAttacker` contract used exclusively in the test suite to actually attempt draining the vault, rather than just asserting that a guard "should" work.
+The contract intentionally does **not** implement yield generation. The goal of this project is to demonstrate secure handling of user funds and adversarial testing patterns that are relevant to real DeFi protocols.
 
-## Security Patterns Demonstrated
+The repository includes a dedicated `ReentrancyAttacker` test contract that attempts to re-enter the vault during an ETH withdrawal. This makes the security tests exercise an actual attack path rather than merely checking that a protection modifier exists.
 
-- **Checks-Effects-Interactions (CEI):** balances are updated *before* any external call that sends ETH, so a reentrant call sees already-updated state.
-- **Reentrancy guard as defense in depth:** a `nonReentrant` modifier backs up CEI ordering rather than replacing it — the test suite proves both layers by actually attacking the contract.
-- **Custom errors instead of require strings:** cheaper gas, and each failure mode is explicit and typed.
-- **Pull-over-push withdrawals:** users withdraw their own funds; the contract never pushes ETH anywhere unprompted.
-- **Emergency pause:** the owner can halt new deposits without ever blocking existing users from withdrawing their own funds.
+## Security Properties
 
-## Project Structure
+### Checks-Effects-Interactions
+
+Withdrawal accounting is updated before the vault performs the external ETH transfer.
+
+If a recipient attempts to re-enter during the transfer, the vault has already reduced the recipient's recorded balance.
+
+### Reentrancy protection
+
+The vault uses an explicit `nonReentrant` guard as defense in depth on top of CEI.
+
+The test suite deploys an attacker contract and verifies that the reentrant withdrawal fails without allowing additional funds to be extracted.
+
+### Custom errors
+
+The contract uses Solidity custom errors instead of string-based `require` messages.
+
+Examples include:
+
+- `ZeroDeposit`
+- `ZeroWithdrawal`
+- `InsufficientBalance`
+- `TransferFailed`
+- `NotOwner`
+- `ContractPaused`
+- `ReentrancyDetected`
+
+This keeps failure modes explicit and avoids unnecessary revert-string overhead.
+
+### Pull-over-push withdrawals
+
+The vault only sends ETH when a user explicitly requests a withdrawal.
+
+It does not automatically distribute funds to users or third parties.
+
+### Emergency pause
+
+The owner can pause deposits in an emergency.
+
+Withdrawals remain available while paused so that existing depositors can recover their funds.
+
+### Failed-transfer safety
+
+If an ETH transfer to the withdrawing address fails, the transaction reverts.
+
+The test suite verifies that accounting is preserved when the recipient rejects ETH.
+
+### Forced ETH
+
+The vault also tests the case where ETH is forced into the contract outside the normal deposit flow.
+
+This demonstrates the distinction between:
+
+- `address(this).balance`, which represents the contract's actual ETH balance;
+- `totalDeposits`, which represents tracked user deposits.
+
+Forced ETH does not silently become attributed to a depositor.
+
+## Test Coverage
+
+The test suite covers:
+
+- individual deposits;
+- multiple deposits;
+- isolated user balances;
+- zero-value deposits;
+- deposit events;
+- total deposit accounting;
+- direct ETH transfers through `receive()`;
+- partial withdrawals;
+- full withdrawals;
+- zero-value withdrawals;
+- over-withdrawal protection;
+- account isolation;
+- withdrawal events;
+- withdrawal accounting;
+- owner-only pause;
+- paused deposits;
+- withdrawals while paused;
+- unpausing;
+- reentrancy attacks;
+- failed ETH transfers;
+- forced ETH;
+- vault balance reporting.
+
+Current test result:
 
 ```text
-contracts/
-├── StakingVault.sol         # main vault: deposit, withdraw, pause
-└── ReentrancyAttacker.sol   # test-only contract used to attack the vault
-
-test/
-└── StakingVault.ts          # full test suite, including a live reentrancy attack
-```
-
-## Running locally
-
-```bash
-npm install
-npm run compile
-npm test
-```
-
-## What the reentrancy test actually does
-
-Rather than trusting that `nonReentrant` works, the test suite deploys a real attacking contract that:
-
-1. Deposits ETH into the vault.
-2. Calls `withdraw()`.
-3. Inside its own `receive()` function — triggered by the vault sending ETH back — tries to call `withdraw()` again *before the first call has finished*.
-
-The reentrant call hits the guard and reverts, which causes the outer ETH transfer to fail, which unwinds the entire attack transaction. The test asserts the vault's balance is left exactly as it was before the attack — the attacker extracts zero extra ETH.
-
-## Tech Stack
-
-- Solidity 0.8.24
-- Hardhat
-- TypeScript
-- Chai / Hardhat Toolbox
-
-## License
-
-MIT — see [LICENSE](./LICENSE) for details.
-
-## Author
-
-**Nicolás Pedernera**
-
-Systems Engineer — Universidad de Buenos Aires, 2024
-
-Focused on backend engineering, fintech, cryptocurrency, blockchain infrastructure, and AI systems.
-
-GitHub: https://github.com/Nicolas-Pedernera
-LinkedIn: https://www.linkedin.com/in/nicolas-pedernera-zendx/
-Upwork: https://www.upwork.com/freelancers/~017eec2171ae9d8805
+23 passing

@@ -121,6 +121,12 @@ describe("StakingVault", () => {
         .withArgs(ethers.parseEther("10"), ethers.parseEther("5"));
     });
 
+    it("reverts on a zero-value withdrawal", async () => {
+      await expect(
+        vault.connect(alice).withdraw(0)
+      ).to.be.revertedWithCustomError(vault, "ZeroWithdrawal");
+    });
+
     it("does not let one account withdraw another account's deposit", async () => {
       await expect(
         vault.connect(bob).withdraw(ethers.parseEther("1"))
@@ -202,6 +208,55 @@ describe("StakingVault", () => {
         ethers.parseEther("10")
       );
       expect(await vault.balanceOf(await attacker.getAddress())).to.equal(0);
+    });
+  });
+
+  describe("failed transfers", () => {
+    it("reverts and preserves accounting when the receiver rejects ETH", async () => {
+      const RejectingReceiverFactory =
+        await ethers.getContractFactory("RejectingReceiver");
+
+      const rejectingReceiver = await RejectingReceiverFactory.deploy(
+        await vault.getAddress()
+      );
+      await rejectingReceiver.waitForDeployment();
+
+      const amount = ethers.parseEther("2");
+
+      await rejectingReceiver.deposit({ value: amount });
+
+      expect(
+        await vault.balanceOf(await rejectingReceiver.getAddress())
+      ).to.equal(amount);
+
+      await expect(
+        rejectingReceiver.withdraw(amount)
+      ).to.be.revertedWithCustomError(vault, "TransferFailed");
+
+      expect(
+        await vault.balanceOf(await rejectingReceiver.getAddress())
+      ).to.equal(amount);
+
+      expect(await vault.totalDeposits()).to.equal(amount);
+      expect(await vault.vaultBalance()).to.equal(amount);
+    });
+  });
+
+  describe("forced ETH", () => {
+    it("does not change accounting when ETH is forced into the vault", async () => {
+      const ForceSendFactory = await ethers.getContractFactory("ForceSend");
+
+      const forcedAmount = ethers.parseEther("1");
+      const forceSend = await ForceSendFactory.deploy({
+        value: forcedAmount
+      });
+
+      await forceSend.waitForDeployment();
+
+      await forceSend.forceSend(await vault.getAddress());
+
+      expect(await vault.vaultBalance()).to.equal(forcedAmount);
+      expect(await vault.totalDeposits()).to.equal(0);
     });
   });
 

@@ -34,3 +34,31 @@ contract ReentrancyAttacker {
         }
     }
 }
+
+contract ForceSend {
+    constructor() payable {}
+
+    function forceSend(address payable target) external {
+        selfdestruct(target);
+    }
+}
+
+contract RejectingReceiver {
+    IStakingVault public immutable vault;
+
+    constructor(address vaultAddress) {
+        vault = IStakingVault(vaultAddress);
+    }
+
+    function deposit() external payable {
+        vault.deposit{value: msg.value}();
+    }
+
+    function withdraw(uint256 amount) external {
+        vault.withdraw(amount);
+    }
+
+    receive() external payable {
+        revert("ETH rejected");
+    }
+}

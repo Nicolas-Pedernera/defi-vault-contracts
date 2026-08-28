@@ -24,6 +24,7 @@ contract StakingVault {
     // ---------------------------------------------------------------
 
     error ZeroDeposit();
+    error ZeroWithdrawal();
     error InsufficientBalance(uint256 requested, uint256 available);
     error TransferFailed();
     error NotOwner();
@@ -120,6 +121,8 @@ contract StakingVault {
      *      this ordering, not a replacement for it.
      */
     function withdraw(uint256 amount) public nonReentrant {
+        if (amount == 0) revert ZeroWithdrawal();
+
         uint256 currentBalance = balanceOf[msg.sender];
 
         if (amount > currentBalance) {
